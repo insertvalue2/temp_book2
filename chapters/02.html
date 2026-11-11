@@ -1,0 +1,628 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"><meta name="viewport" content="width=device-width,initial-scale=1"><title>스프링부트4와시큐리티쿡북</title><link rel="stylesheet" href="../assets/book-d4f8cb83afec858a.css"></head><body><div class="reader" data-toc="open"><header class="book-bar"><button type="button" class="toc-toggle" aria-expanded="true" aria-controls="toc">목차</button><span class="book-bar__title">스프링부트4와시큐리티쿡북</span></header><aside class="toc" id="toc"><p class="caption">목차 / CONTENTS</p><div class="toc-title">스프링부트4와시큐리티쿡북</div><a href="../index.html" data-chapter="0" title="표지" aria-current="false">표지</a><a href="01.html" data-chapter="1" title="1장. REST API 프로젝트 준비하기" aria-current="false">1장. REST API 프로젝트 준비하기</a><a href="02.html" data-chapter="2" title="2장. 엔티티와 더미 데이터 만들기" aria-current="true">2장. 엔티티와 더미 데이터 만들기</a><a href="03.html" data-chapter="3" title="3장. JWT로 토큰 만들고 검증하기" aria-current="false">3장. JWT로 토큰 만들고 검증하기</a><a href="04.html" data-chapter="4" title="4장. 공통 응답과 예외 처리 만들기" aria-current="false">4장. 공통 응답과 예외 처리 만들기</a><a href="05.html" data-chapter="5" title="5장. 스프링 시큐리티와 JWT 필터 만들기" aria-current="false">5장. 스프링 시큐리티와 JWT 필터 만들기</a><a href="06.html" data-chapter="6" title="6장. SecurityFilterChain 설정하기" aria-current="false">6장. SecurityFilterChain 설정하기</a><a href="07.html" data-chapter="7" title="7장. 회원 API 만들기" aria-current="false">7장. 회원 API 만들기</a><a href="08.html" data-chapter="8" title="8장. JWT 인증 전체 흐름 확인하기" aria-current="false">8장. JWT 인증 전체 흐름 확인하기</a><footer>8장</footer></aside><main class="reading"><section class="chapter" id="chapter-2"><div class="eyebrow">스프링부트4와시큐리티쿡북 / CHAPTER 02</div><span class="chapter-num" aria-hidden="true">02</span><h2>2장. 엔티티와 더미 데이터 만들기</h2><h3>1. User 엔티티</h3>
+<h4>1.1 UserDetails 구현하기</h4>
+<p><strong>UserDetails</strong>는 스프링 시큐리티가 사용자 한 명의 정보를 읽을 때 쓰는 인터페이스입니다. 시큐리티는 개발자가 만든 회원 클래스의 구조를 모릅니다. 그래서 아이디, 비밀번호, 권한을 <code>UserDetails</code>에 정해진 메서드 이름으로 꺼내 갑니다. User 엔티티가 이 인터페이스를 구현하면 DB에서 조회한 회원 객체를 그대로 로그인한 사용자로 쓸 수 있습니다.</p>
+<p>반드시 구현해야 하는 메서드는 세 개입니다.</p>
+<table><thead><tr><th>메서드</th><th>돌려주는 값</th><th>User 엔티티에서 채우는 방법</th></tr></thead><tbody><tr><td><code>getUsername()</code></td><td>아이디</td><td>Lombok <code>@Getter</code>가 만든 메서드</td></tr><tr><td><code>getPassword()</code></td><td>암호화된 비밀번호</td><td>Lombok <code>@Getter</code>가 만든 메서드</td></tr><tr><td><code>getAuthorities()</code></td><td>권한 목록</td><td>직접 작성(1.3에서 설명)</td></tr></tbody></table>
+<p><code>isAccountNonExpired()</code>, <code>isAccountNonLocked()</code>, <code>isCredentialsNonExpired()</code>, <code>isEnabled()</code>는 계정 상태를 묻는 메서드입니다. 스프링 시큐리티 6.3부터는 이 네 메서드가 <code>true</code>를 돌려주는 기본 메서드로 인터페이스 안에 들어 있습니다. 계정 정지나 휴면 정책이 없으면 따로 작성하지 않습니다.</p>
+<p><strong>예제 2-1 — User 엔티티 만들기</strong></p>
+<p><strong>이어서:</strong> 예제 1-2</p>
+<p><strong>파일명:</strong> <code>src/main/java/com/newtenco/blog/user/User.java</code></p>
+<div class="code-wrap" data-kind="code" data-lang="java"><div class="code-label"><span class="code-label__name">Java</span><div class="code-tools"><span class="copy-result" aria-live="polite"></span><button type="button" class="small copy">복사</button></div></div><div class="code-body"><div class="code-ln" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59</div><pre><code class="language-java" data-code="package com.newtenco.blog.user;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@Getter
+@Entity
+@Table(name = &quot;user_tb&quot;)
+public class User implements UserDetails {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(unique = true, length = 20, nullable = false)
+    private String username;
+
+    @Column(length = 60, nullable = false)
+    private String password;
+
+    @Column(length = 30, nullable = false)
+    private String email;
+
+    // 권한 목록은 user_role_tb 테이블에 한 줄씩 저장된다
+    // EAGER: 회원을 조회할 때 권한도 함께 가져온다
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = &quot;user_role_tb&quot;, joinColumns = @JoinColumn(name = &quot;user_id&quot;))
+    @Column(name = &quot;role&quot;)
+    @Builder.Default
+    private List&lt;String&gt; roles = new ArrayList&lt;&gt;(List.of(&quot;USER&quot;));
+
+    @CreationTimestamp
+    private Timestamp createdAt;
+
+    public void update(String email, String password) {
+        this.email = email;
+        this.password = password;
+    }
+
+    // hasRole(&quot;USER&quot;)로 검사하려면 권한 이름 앞에 ROLE_ 이 있어야 한다
+    @Override
+    public Collection&lt;? extends GrantedAuthority&gt; getAuthorities() {
+        return roles.stream()
+                .map(role -&gt; new SimpleGrantedAuthority(&quot;ROLE_&quot; + role))
+                .toList();
+    }
+}"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>user</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">jakarta<span class="token punctuation">.</span>persistence<span class="token punctuation">.</span></span><span class="token operator">*</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token operator">*</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>hibernate<span class="token punctuation">.</span>annotations<span class="token punctuation">.</span></span><span class="token class-name">CreationTimestamp</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>security<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">GrantedAuthority</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>security<span class="token punctuation">.</span>core<span class="token punctuation">.</span>authority<span class="token punctuation">.</span></span><span class="token class-name">SimpleGrantedAuthority</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>security<span class="token punctuation">.</span>core<span class="token punctuation">.</span>userdetails<span class="token punctuation">.</span></span><span class="token class-name">UserDetails</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>sql<span class="token punctuation">.</span></span><span class="token class-name">Timestamp</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">ArrayList</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Collection</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">List</span></span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@NoArgsConstructor</span>
+<span class="token annotation punctuation">@AllArgsConstructor</span>
+<span class="token annotation punctuation">@Builder</span>
+<span class="token annotation punctuation">@Getter</span>
+<span class="token annotation punctuation">@Entity</span>
+<span class="token annotation punctuation">@Table</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"user_tb"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">User</span> <span class="token keyword">implements</span> <span class="token class-name">UserDetails</span> <span class="token punctuation">{</span>
+
+    <span class="token annotation punctuation">@Id</span>
+    <span class="token annotation punctuation">@GeneratedValue</span><span class="token punctuation">(</span>strategy <span class="token operator">=</span> <span class="token class-name">GenerationType</span><span class="token punctuation">.</span><span class="token constant">IDENTITY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Integer</span> id<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>unique <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">,</span> length <span class="token operator">=</span> <span class="token number">20</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> username<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>length <span class="token operator">=</span> <span class="token number">60</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> password<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>length <span class="token operator">=</span> <span class="token number">30</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> email<span class="token punctuation">;</span>
+
+    <span class="token comment">// 권한 목록은 user_role_tb 테이블에 한 줄씩 저장된다</span>
+    <span class="token comment">// EAGER: 회원을 조회할 때 권한도 함께 가져온다</span>
+    <span class="token annotation punctuation">@ElementCollection</span><span class="token punctuation">(</span>fetch <span class="token operator">=</span> <span class="token class-name">FetchType</span><span class="token punctuation">.</span><span class="token constant">EAGER</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@CollectionTable</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"user_role_tb"</span><span class="token punctuation">,</span> joinColumns <span class="token operator">=</span> <span class="token annotation punctuation">@JoinColumn</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"user_id"</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"role"</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@Builder.Default</span>
+    <span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">></span></span> roles <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">></span></span><span class="token punctuation">(</span><span class="token class-name">List</span><span class="token punctuation">.</span><span class="token function">of</span><span class="token punctuation">(</span><span class="token string">"USER"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@CreationTimestamp</span>
+    <span class="token keyword">private</span> <span class="token class-name">Timestamp</span> createdAt<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">update</span><span class="token punctuation">(</span><span class="token class-name">String</span> email<span class="token punctuation">,</span> <span class="token class-name">String</span> password<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>email <span class="token operator">=</span> email<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>password <span class="token operator">=</span> password<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// hasRole("USER")로 검사하려면 권한 이름 앞에 ROLE_ 이 있어야 한다</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token class-name">Collection</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span> <span class="token keyword">extends</span> <span class="token class-name">GrantedAuthority</span><span class="token punctuation">></span></span> <span class="token function">getAuthorities</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> roles<span class="token punctuation">.</span><span class="token function">stream</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>role <span class="token operator">-></span> <span class="token keyword">new</span> <span class="token class-name">SimpleGrantedAuthority</span><span class="token punctuation">(</span><span class="token string">"ROLE_"</span> <span class="token operator">+</span> role<span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">toList</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p><code>getUsername()</code>과 <code>getPassword()</code>를 직접 작성하지 않아도 컴파일됩니다. <code>@Getter</code>가 필드 이름에 맞춰 같은 이름의 메서드를 만들기 때문입니다. 필드 이름을 <code>userId</code>나 <code>pwd</code>로 바꾸면 만들어지는 메서드 이름도 달라집니다. 그러면 인터페이스의 메서드를 구현하지 못해 컴파일 오류가 납니다. 필드 이름은 <code>username</code>, <code>password</code>로 둡니다.</p>
+<p><code>password</code> 열의 길이가 60인 것은 BCrypt로 암호화한 값이 60자이기 때문입니다. DB에는 평문 비밀번호를 저장하지 않습니다.</p>
+<h4>1.2 권한 목록과 @ElementCollection</h4>
+<p>회원 한 명이 권한을 여러 개 가질 수 있습니다. 일반 회원은 USER 하나만 갖고, 관리자는 USER와 ADMIN을 함께 갖습니다. 권한을 <code>&quot;USER,ADMIN&quot;</code>처럼 한 칸에 쉼표로 이어 넣으면 1차 정규화 규칙에 어긋납니다. 한 칸에는 값을 하나만 두어야 하기 때문입니다. 권한 하나만 지우거나 특정 권한을 가진 회원을 찾을 때마다 문자열을 잘라야 하는 불편도 생깁니다.</p>
+<p><strong>@ElementCollection</strong>은 엔티티가 아닌 값의 모음(여기서는 <code>List&lt;String&gt;</code>)을 별도 테이블에 저장하는 JPA 어노테이션입니다. 권한용 엔티티 클래스를 따로 만들지 않아도 JPA가 테이블을 만들고 회원 id로 연결합니다.</p>
+<table><thead><tr><th>어노테이션</th><th>하는 일</th></tr></thead><tbody><tr><td><code>@ElementCollection(fetch = FetchType.EAGER)</code></td><td><code>roles</code>를 별도 테이블에 저장하고, 회원을 조회할 때 함께 읽어 옵니다</td></tr><tr><td><code>@CollectionTable(name = &quot;user_role_tb&quot;, ...)</code></td><td>테이블 이름을 <code>user_role_tb</code>로, 회원을 가리키는 외래 키 열을 <code>user_id</code>로 정합니다</td></tr><tr><td><code>@Column(name = &quot;role&quot;)</code></td><td>권한 값을 담는 열 이름을 <code>role</code>로 정합니다</td></tr><tr><td><code>@Builder.Default</code></td><td>빌더로 회원을 만들 때도 기본값 <code>USER</code>가 들어가게 합니다</td></tr></tbody></table>
+<p>두 테이블에는 다음처럼 저장됩니다. cos는 권한이 두 개라서 <code>user_role_tb</code>에 두 줄이 생깁니다.</p>
+<p><strong>user_tb</strong></p>
+<table><thead><tr><th>id</th><th>username</th></tr></thead><tbody><tr><td>1</td><td>ssar</td></tr><tr><td>2</td><td>cos</td></tr></tbody></table>
+<p><strong>user_role_tb</strong></p>
+<table><thead><tr><th>user_id</th><th>role</th></tr></thead><tbody><tr><td>1</td><td>USER</td></tr><tr><td>2</td><td>USER</td></tr><tr><td>2</td><td>ADMIN</td></tr></tbody></table>
+<p><code>EAGER</code>를 직접 적은 것은 지연 로딩 때문입니다. <code>@ElementCollection</code>은 기본값이 지연 로딩(LAZY)이라서 값을 실제로 쓰는 순간에야 DB에서 읽어 옵니다. 그런데 1장에서 <code>spring.jpa.open-in-view=false</code>로 설정했으므로 서비스의 트랜잭션이 끝나면 DB 연결이 반납됩니다. 그 뒤에 시큐리티가 <code>getAuthorities()</code>를 부르면 아직 읽지 않은 권한을 가져오지 못해 <code>LazyInitializationException</code>이 발생합니다. 권한은 회원을 쓸 때마다 필요한 값이므로 처음부터 함께 가져옵니다.</p>
+<p><code>@Builder.Default</code>도 빼면 안 됩니다. 이 어노테이션이 없으면 빌더는 필드에 적은 초기값을 무시합니다. 그래서 <code>User.builder()...build()</code>로 만든 객체의 <code>roles</code>가 <code>null</code>이 됩니다. 7장의 회원가입은 빌더로 회원을 만들기 때문에, 새 회원이 USER 권한을 자동으로 받으려면 이 어노테이션이 필요합니다.</p>
+<h4>1.3 getAuthorities()와 ROLE_ 접두사</h4>
+<p><code>getAuthorities()</code>는 회원의 권한 목록을 시큐리티가 이해하는 <code>GrantedAuthority</code> 객체 목록으로 바꿔 돌려줍니다. <strong>GrantedAuthority</strong>는 사용자에게 허락된 권한 하나를 나타내는 인터페이스입니다. <code>SimpleGrantedAuthority</code>는 권한 이름 문자열 하나를 담는 기본 구현체입니다.</p>
+<p>DB에는 <code>USER</code>, <code>ADMIN</code>만 저장하고, 돌려줄 때 앞에 <code>ROLE_</code>을 붙입니다. 6장에서는 접근 규칙을 <code>hasRole(&quot;ADMIN&quot;)</code>으로 씁니다. 이때 시큐리티는 <code>ROLE_ADMIN</code>이라는 권한이 있는지 검사합니다. <code>getAuthorities()</code>에서 <code>ROLE_</code>을 붙이지 않으면 관리자 계정으로도 관리자 API에 들어가지 못합니다.</p>
+<table><thead><tr><th>DB의 role 값</th><th>getAuthorities()가 돌려주는 권한</th><th>6장에서 검사하는 방법</th></tr></thead><tbody><tr><td>USER</td><td>ROLE_USER</td><td><code>hasRole(&quot;USER&quot;)</code></td></tr><tr><td>ADMIN</td><td>ROLE_ADMIN</td><td><code>hasRole(&quot;ADMIN&quot;)</code></td></tr></tbody></table>
+<p>접두사를 붙이는 코드는 <code>getAuthorities()</code> 한 곳에만 있습니다. 그래서 DB 값과 접근 규칙 코드에는 <code>ROLE_</code> 없이 읽기 쉬운 이름만 씁니다.</p>
+<h3>2. Board · Reply 엔티티</h3>
+<p>이 책에서는 게시글과 댓글 API를 만들지 않습니다. 회원과 다른 데이터가 연결된 실제 프로젝트 구조를 갖추려고 테이블만 준비합니다. 나중에 게시판 API로 확장할 때 이 엔티티를 그대로 쓸 수 있습니다.</p>
+<figure class="book-figure" data-type="generated" id="figure-06d6607269ac"><div class="figure-scroll"><img src="../assets/img/bc8cab6e2aba02af.png" alt="네 테이블의 관계" data-raster="true"/></div><figcaption>네 테이블의 관계</figcaption></figure>
+<p>그림 2-1처럼 게시글은 작성자 한 명을 가리키고, 댓글은 작성자 한 명과 게시글 하나를 가리킵니다. 외래 키는 모두 N 쪽 테이블에 생깁니다.</p>
+<p><strong>예제 2-2 — 게시글과 댓글 엔티티 만들기</strong></p>
+<p><strong>이어서:</strong> 예제 2-1</p>
+<p><strong>파일명:</strong> <code>src/main/java/com/newtenco/blog/board/Board.java</code></p>
+<div class="code-wrap" data-kind="code" data-lang="java"><div class="code-label"><span class="code-label__name">Java</span><div class="code-tools"><span class="copy-result" aria-live="polite"></span><button type="button" class="small copy">복사</button></div></div><div class="code-body"><div class="code-ln" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55</div><pre><code class="language-java" data-code="package com.newtenco.blog.board;
+
+import com.newtenco.blog.reply.Reply;
+import com.newtenco.blog.user.User;
+import jakarta.persistence.*;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+
+@NoArgsConstructor
+@Getter
+@Entity
+@Table(name = &quot;board_tb&quot;)
+public class Board {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(length = 100, nullable = false)
+    private String title;
+
+    @Column(length = 1000, nullable = false)
+    private String content;
+
+    // 게시글(N) : 회원(1) -&gt; 외래 키 user_id 는 board_tb 에 생긴다
+    @ManyToOne(fetch = FetchType.LAZY)
+    private User user;
+
+    // 연관관계의 주인이 아님(mappedBy) -&gt; 조회 전용
+    @OneToMany(mappedBy = &quot;board&quot;, fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
+    private List&lt;Reply&gt; replies = new ArrayList&lt;&gt;();
+
+    @CreationTimestamp
+    private Timestamp createdAt;
+
+    @Builder
+    public Board(Integer id, String title, String content, User user, Timestamp createdAt) {
+        this.id = id;
+        this.title = title;
+        this.content = content;
+        this.user = user;
+        this.createdAt = createdAt;
+    }
+
+    public void update(String title, String content) {
+        this.title = title;
+        this.content = content;
+    }
+}"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>board</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>reply<span class="token punctuation">.</span></span><span class="token class-name">Reply</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>user<span class="token punctuation">.</span></span><span class="token class-name">User</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">jakarta<span class="token punctuation">.</span>persistence<span class="token punctuation">.</span></span><span class="token operator">*</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">Builder</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">Getter</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">NoArgsConstructor</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>hibernate<span class="token punctuation">.</span>annotations<span class="token punctuation">.</span></span><span class="token class-name">CreationTimestamp</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>sql<span class="token punctuation">.</span></span><span class="token class-name">Timestamp</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">ArrayList</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">List</span></span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@NoArgsConstructor</span>
+<span class="token annotation punctuation">@Getter</span>
+<span class="token annotation punctuation">@Entity</span>
+<span class="token annotation punctuation">@Table</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"board_tb"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Board</span> <span class="token punctuation">{</span>
+
+    <span class="token annotation punctuation">@Id</span>
+    <span class="token annotation punctuation">@GeneratedValue</span><span class="token punctuation">(</span>strategy <span class="token operator">=</span> <span class="token class-name">GenerationType</span><span class="token punctuation">.</span><span class="token constant">IDENTITY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Integer</span> id<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>length <span class="token operator">=</span> <span class="token number">100</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> title<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>length <span class="token operator">=</span> <span class="token number">1000</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> content<span class="token punctuation">;</span>
+
+    <span class="token comment">// 게시글(N) : 회원(1) -> 외래 키 user_id 는 board_tb 에 생긴다</span>
+    <span class="token annotation punctuation">@ManyToOne</span><span class="token punctuation">(</span>fetch <span class="token operator">=</span> <span class="token class-name">FetchType</span><span class="token punctuation">.</span><span class="token constant">LAZY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">User</span> user<span class="token punctuation">;</span>
+
+    <span class="token comment">// 연관관계의 주인이 아님(mappedBy) -> 조회 전용</span>
+    <span class="token annotation punctuation">@OneToMany</span><span class="token punctuation">(</span>mappedBy <span class="token operator">=</span> <span class="token string">"board"</span><span class="token punctuation">,</span> fetch <span class="token operator">=</span> <span class="token class-name">FetchType</span><span class="token punctuation">.</span><span class="token constant">LAZY</span><span class="token punctuation">,</span> cascade <span class="token operator">=</span> <span class="token class-name">CascadeType</span><span class="token punctuation">.</span><span class="token constant">REMOVE</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Reply</span><span class="token punctuation">></span></span> replies <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@CreationTimestamp</span>
+    <span class="token keyword">private</span> <span class="token class-name">Timestamp</span> createdAt<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token class-name">Board</span><span class="token punctuation">(</span><span class="token class-name">Integer</span> id<span class="token punctuation">,</span> <span class="token class-name">String</span> title<span class="token punctuation">,</span> <span class="token class-name">String</span> content<span class="token punctuation">,</span> <span class="token class-name">User</span> user<span class="token punctuation">,</span> <span class="token class-name">Timestamp</span> createdAt<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>id <span class="token operator">=</span> id<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>title <span class="token operator">=</span> title<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>content <span class="token operator">=</span> content<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>user <span class="token operator">=</span> user<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>createdAt <span class="token operator">=</span> createdAt<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">update</span><span class="token punctuation">(</span><span class="token class-name">String</span> title<span class="token punctuation">,</span> <span class="token class-name">String</span> content<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>title <span class="token operator">=</span> title<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>content <span class="token operator">=</span> content<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p><strong>파일명:</strong> <code>src/main/java/com/newtenco/blog/reply/Reply.java</code></p>
+<div class="code-wrap" data-kind="code" data-lang="java"><div class="code-label"><span class="code-label__name">Java</span><div class="code-tools"><span class="copy-result" aria-live="polite"></span><button type="button" class="small copy">복사</button></div></div><div class="code-body"><div class="code-ln" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44</div><pre><code class="language-java" data-code="package com.newtenco.blog.reply;
+
+import com.newtenco.blog.board.Board;
+import com.newtenco.blog.user.User;
+import jakarta.persistence.*;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.sql.Timestamp;
+
+@NoArgsConstructor
+@Getter
+@Entity
+@Table(name = &quot;reply_tb&quot;)
+public class Reply {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    @Column(length = 100, nullable = false)
+    private String comment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private User user;
+
+    // 연관관계의 주인: 외래 키 board_id 를 관리한다
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Board board;
+
+    @CreationTimestamp
+    private Timestamp createdAt;
+
+    @Builder
+    public Reply(Integer id, String comment, User user, Board board, Timestamp createdAt) {
+        this.id = id;
+        this.comment = comment;
+        this.user = user;
+        this.board = board;
+        this.createdAt = createdAt;
+    }
+}"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>reply</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>board<span class="token punctuation">.</span></span><span class="token class-name">Board</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>newtenco<span class="token punctuation">.</span>blog<span class="token punctuation">.</span>user<span class="token punctuation">.</span></span><span class="token class-name">User</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">jakarta<span class="token punctuation">.</span>persistence<span class="token punctuation">.</span></span><span class="token operator">*</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">Builder</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">Getter</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">lombok<span class="token punctuation">.</span></span><span class="token class-name">NoArgsConstructor</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>hibernate<span class="token punctuation">.</span>annotations<span class="token punctuation">.</span></span><span class="token class-name">CreationTimestamp</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>sql<span class="token punctuation">.</span></span><span class="token class-name">Timestamp</span></span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@NoArgsConstructor</span>
+<span class="token annotation punctuation">@Getter</span>
+<span class="token annotation punctuation">@Entity</span>
+<span class="token annotation punctuation">@Table</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"reply_tb"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Reply</span> <span class="token punctuation">{</span>
+
+    <span class="token annotation punctuation">@Id</span>
+    <span class="token annotation punctuation">@GeneratedValue</span><span class="token punctuation">(</span>strategy <span class="token operator">=</span> <span class="token class-name">GenerationType</span><span class="token punctuation">.</span><span class="token constant">IDENTITY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Integer</span> id<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Column</span><span class="token punctuation">(</span>length <span class="token operator">=</span> <span class="token number">100</span><span class="token punctuation">,</span> nullable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> comment<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@ManyToOne</span><span class="token punctuation">(</span>fetch <span class="token operator">=</span> <span class="token class-name">FetchType</span><span class="token punctuation">.</span><span class="token constant">LAZY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">User</span> user<span class="token punctuation">;</span>
+
+    <span class="token comment">// 연관관계의 주인: 외래 키 board_id 를 관리한다</span>
+    <span class="token annotation punctuation">@ManyToOne</span><span class="token punctuation">(</span>fetch <span class="token operator">=</span> <span class="token class-name">FetchType</span><span class="token punctuation">.</span><span class="token constant">LAZY</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Board</span> board<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@CreationTimestamp</span>
+    <span class="token keyword">private</span> <span class="token class-name">Timestamp</span> createdAt<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token class-name">Reply</span><span class="token punctuation">(</span><span class="token class-name">Integer</span> id<span class="token punctuation">,</span> <span class="token class-name">String</span> comment<span class="token punctuation">,</span> <span class="token class-name">User</span> user<span class="token punctuation">,</span> <span class="token class-name">Board</span> board<span class="token punctuation">,</span> <span class="token class-name">Timestamp</span> createdAt<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>id <span class="token operator">=</span> id<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>comment <span class="token operator">=</span> comment<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>user <span class="token operator">=</span> user<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>board <span class="token operator">=</span> board<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>createdAt <span class="token operator">=</span> createdAt<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>연관관계 매핑은 SSR 게시판에서 써 본 방식과 같습니다. 여기서는 3절의 더미 데이터와 이어지는 부분만 짚습니다.</p>
+<table><thead><tr><th>어노테이션</th><th>위치</th><th>역할</th></tr></thead><tbody><tr><td><code>@ManyToOne</code></td><td><code>Board.user</code>, <code>Reply.user</code>, <code>Reply.board</code></td><td>N:1 관계입니다. 외래 키가 이 엔티티의 테이블에 생기며, 이쪽이 <strong>연관관계의 주인</strong>입니다</td></tr><tr><td><code>@OneToMany(mappedBy = &quot;board&quot;)</code></td><td><code>Board.replies</code></td><td>주인이 아니므로 외래 키를 바꾸지 못하고 조회만 합니다</td></tr></tbody></table>
+<p>외래 키 열 이름은 <code>필드 이름_참조 테이블의 기본 키 이름</code> 규칙으로 정해집니다. 그래서 <code>Board.user</code>는 <code>user_id</code>, <code>Reply.board</code>는 <code>board_id</code> 열이 됩니다. 3절의 data.sql은 이 열 이름으로 값을 넣습니다. <code>mappedBy</code>의 <code>&quot;board&quot;</code>는 열 이름이 아니라 <code>Reply</code> 클래스의 필드 이름입니다.</p>
+<p><code>cascade = CascadeType.REMOVE</code>를 적으면 게시글을 지울 때 딸린 댓글도 함께 지워집니다. 이 설정이 없으면 댓글이 달린 게시글을 지울 때 외래 키 제약 때문에 삭제가 실패합니다.</p>
+<h3>3. 더미 데이터 넣기</h3>
+<h4>3.1 data.sql 작성</h4>
+<p><strong>더미 데이터</strong>는 개발 중에 API 동작을 확인하려고 미리 넣어 두는 시험용 데이터입니다. 1장 4.2에서 <code>spring.sql.init.data-locations=classpath:db/data.sql</code>로 파일 위치를 정하고 빈 파일을 만들어 두었습니다. <code>spring.jpa.defer-datasource-initialization=true</code> 설정 덕분에 이 파일은 JPA가 테이블을 만든 다음에 실행됩니다. H2 메모리 DB는 서버를 켤 때마다 빈 상태로 시작하므로, 실행할 때마다 같은 데이터가 다시 들어갑니다.</p>
+<p><strong>예제 2-3 — 더미 데이터 넣기</strong></p>
+<p><strong>이어서:</strong> 예제 2-2</p>
+<p><strong>파일명:</strong> <code>src/main/resources/db/data.sql</code></p>
+<div class="code-wrap" data-kind="code" data-lang="sql"><div class="code-label"><span class="code-label__name">SQL</span><div class="code-tools"><span class="copy-result" aria-live="polite"></span><button type="button" class="small copy">복사</button></div></div><div class="code-body"><div class="code-ln" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</div><pre><code class="language-sql" data-code="-- 비밀번호는 모두 1234 를 BCrypt 로 암호화한 값이다
+insert into user_tb (username, password, email, created_at) values (&#x27;ssar&#x27;, &#x27;$2a$10$eiDus5jn3LsNyfjng4/HxukQh.7EZmn1ZNL1g4s3kkqPYpwY5DiuO&#x27;, &#x27;ssar@metacoding.com&#x27;, now());
+insert into user_tb (username, password, email, created_at) values (&#x27;cos&#x27;, &#x27;$2a$10$eiDus5jn3LsNyfjng4/HxukQh.7EZmn1ZNL1g4s3kkqPYpwY5DiuO&#x27;, &#x27;cos@metacoding.com&#x27;, now());
+
+-- 권한은 한 줄에 하나씩 (ssar: USER / cos: USER, ADMIN)
+insert into user_role_tb (user_id, role) values (1, &#x27;USER&#x27;);
+insert into user_role_tb (user_id, role) values (2, &#x27;USER&#x27;);
+insert into user_role_tb (user_id, role) values (2, &#x27;ADMIN&#x27;);
+
+insert into board_tb (title, content, user_id, created_at) values (&#x27;제목1&#x27;, &#x27;내용1&#x27;, 1, now());
+insert into board_tb (title, content, user_id, created_at) values (&#x27;제목2&#x27;, &#x27;내용2&#x27;, 1, now());
+insert into board_tb (title, content, user_id, created_at) values (&#x27;제목3&#x27;, &#x27;내용3&#x27;, 1, now());
+insert into board_tb (title, content, user_id, created_at) values (&#x27;제목4&#x27;, &#x27;내용4&#x27;, 2, now());
+insert into board_tb (title, content, user_id, created_at) values (&#x27;제목5&#x27;, &#x27;내용5&#x27;, 2, now());
+
+insert into reply_tb (comment, board_id, user_id, created_at) values (&#x27;댓글1&#x27;, 4, 2, now());
+insert into reply_tb (comment, board_id, user_id, created_at) values (&#x27;댓글2&#x27;, 4, 2, now());
+insert into reply_tb (comment, board_id, user_id, created_at) values (&#x27;댓글3&#x27;, 4, 2, now());
+insert into reply_tb (comment, board_id, user_id, created_at) values (&#x27;댓글4&#x27;, 5, 1, now());
+insert into reply_tb (comment, board_id, user_id, created_at) values (&#x27;댓글5&#x27;, 5, 1, now());"><span class="token comment">-- 비밀번호는 모두 1234 를 BCrypt 로 암호화한 값이다</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> user_tb <span class="token punctuation">(</span>username<span class="token punctuation">,</span> password<span class="token punctuation">,</span> email<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'ssar'</span><span class="token punctuation">,</span> <span class="token string">'$2a$10$eiDus5jn3LsNyfjng4/HxukQh.7EZmn1ZNL1g4s3kkqPYpwY5DiuO'</span><span class="token punctuation">,</span> <span class="token string">'ssar@metacoding.com'</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> user_tb <span class="token punctuation">(</span>username<span class="token punctuation">,</span> password<span class="token punctuation">,</span> email<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'cos'</span><span class="token punctuation">,</span> <span class="token string">'$2a$10$eiDus5jn3LsNyfjng4/HxukQh.7EZmn1ZNL1g4s3kkqPYpwY5DiuO'</span><span class="token punctuation">,</span> <span class="token string">'cos@metacoding.com'</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">-- 권한은 한 줄에 하나씩 (ssar: USER / cos: USER, ADMIN)</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> user_role_tb <span class="token punctuation">(</span>user_id<span class="token punctuation">,</span> role<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">'USER'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> user_role_tb <span class="token punctuation">(</span>user_id<span class="token punctuation">,</span> role<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token string">'USER'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> user_role_tb <span class="token punctuation">(</span>user_id<span class="token punctuation">,</span> role<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token string">'ADMIN'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">insert</span> <span class="token keyword">into</span> board_tb <span class="token punctuation">(</span>title<span class="token punctuation">,</span> content<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'제목1'</span><span class="token punctuation">,</span> <span class="token string">'내용1'</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> board_tb <span class="token punctuation">(</span>title<span class="token punctuation">,</span> content<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'제목2'</span><span class="token punctuation">,</span> <span class="token string">'내용2'</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> board_tb <span class="token punctuation">(</span>title<span class="token punctuation">,</span> content<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'제목3'</span><span class="token punctuation">,</span> <span class="token string">'내용3'</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> board_tb <span class="token punctuation">(</span>title<span class="token punctuation">,</span> content<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'제목4'</span><span class="token punctuation">,</span> <span class="token string">'내용4'</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> board_tb <span class="token punctuation">(</span>title<span class="token punctuation">,</span> content<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'제목5'</span><span class="token punctuation">,</span> <span class="token string">'내용5'</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">insert</span> <span class="token keyword">into</span> reply_tb <span class="token punctuation">(</span><span class="token keyword">comment</span><span class="token punctuation">,</span> board_id<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'댓글1'</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> reply_tb <span class="token punctuation">(</span><span class="token keyword">comment</span><span class="token punctuation">,</span> board_id<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'댓글2'</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> reply_tb <span class="token punctuation">(</span><span class="token keyword">comment</span><span class="token punctuation">,</span> board_id<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'댓글3'</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> reply_tb <span class="token punctuation">(</span><span class="token keyword">comment</span><span class="token punctuation">,</span> board_id<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'댓글4'</span><span class="token punctuation">,</span> <span class="token number">5</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">insert</span> <span class="token keyword">into</span> reply_tb <span class="token punctuation">(</span><span class="token keyword">comment</span><span class="token punctuation">,</span> board_id<span class="token punctuation">,</span> user_id<span class="token punctuation">,</span> created_at<span class="token punctuation">)</span> <span class="token keyword">values</span> <span class="token punctuation">(</span><span class="token string">'댓글5'</span><span class="token punctuation">,</span> <span class="token number">5</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token function">now</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<p>데이터는 참조되는 테이블부터 넣습니다. <code>user_role_tb</code>, <code>board_tb</code>, <code>reply_tb</code>는 모두 <code>user_tb</code>의 id를 외래 키로 가리킵니다. 회원보다 권한이나 게시글을 먼저 넣으면 외래 키 제약 위반이 일어나 서버가 시작하지 못합니다. 댓글을 게시글 다음에 넣는 것도 같은 이유입니다.</p>
+<p><code>user_id</code>에 1과 2를 바로 적을 수 있는 것은 <code>IDENTITY</code> 전략이 id를 1부터 차례로 붙이기 때문입니다. 먼저 넣은 ssar가 1번, cos가 2번이 됩니다.</p>
+<p>권한을 <code>user_role_tb</code>에 직접 넣는 것은 엔티티의 기본값이 SQL에는 적용되지 않기 때문입니다. 엔티티에 적은 기본값 <code>USER</code>는 자바에서 객체를 만들 때만 들어갑니다. SQL로 <code>user_tb</code>에 바로 넣은 행에는 이 기본값이 들어가지 않습니다.</p>
+<h4>3.2 테스트 계정(ssar · cos, 비밀번호 1234)</h4>
+<p>로그인 실습에서는 다음 두 계정을 씁니다.</p>
+<table><thead><tr><th>아이디</th><th>비밀번호</th><th>권한</th><th>쓰임</th></tr></thead><tbody><tr><td>ssar</td><td>1234</td><td>USER</td><td>일반 회원으로 요청할 때</td></tr><tr><td>cos</td><td>1234</td><td>USER, ADMIN</td><td>관리자 API를 요청할 때</td></tr></tbody></table>
+<p><code>password</code> 열에 들어 있는 값은 <code>1234</code>가 아니라 <code>$2a$10$</code>로 시작하는 60자 문자열입니다. <code>1234</code>를 BCrypt로 암호화한 값입니다. 로그인할 때는 평문 <code>1234</code>를 입력하고, 서버가 입력값과 저장된 암호문을 비교합니다. 암호화와 비교 원리는 7장에서 설명합니다.</p>
+<h3>4. 지금 확인할 수 있는 것</h3>
+<h4>4.1 서버 실행 로그에서 테이블 생성 확인</h4>
+<p>아직 컨트롤러와 시큐리티 설정이 없어서 API로는 확인할 수 없습니다. 대신 서버를 실행하고, 엔티티가 테이블로 만들어졌는지 로그에서 봅니다. 1장에서 <code>spring.jpa.show-sql=true</code>와 <code>format_sql=true</code>를 켜 두었으므로 Hibernate가 실행한 DDL이 줄을 맞춰 콘솔에 출력됩니다.</p>
+<p>IntelliJ에서 <code>BlogApplication</code>의 <code>main()</code>을 실행합니다.</p>
+<p><strong>실행 결과</strong></p>
+<p>콘솔에 <code>create table</code> 문이 네 개 출력됩니다. 다음은 그중 <code>user_tb</code>와 <code>user_role_tb</code> 부분입니다.</p>
+<div class="code-wrap" data-kind="output" data-lang="text"><div class="code-label"><span class="code-label__name">출력</span><div class="code-tools"><span class="copy-result" aria-live="polite"></span><button type="button" class="small copy">복사</button></div></div><div class="code-body"><div class="code-ln" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14</div><pre><code data-code="Hibernate: 
+    create table user_role_tb (
+        user_id integer not null,
+        role varchar(255)
+    )
+Hibernate: 
+    create table user_tb (
+        id integer generated by default as identity,
+        created_at timestamp(6),
+        email varchar(30) not null,
+        password varchar(60) not null,
+        username varchar(20) not null unique,
+        primary key (id)
+    )">Hibernate: 
+    create table user_role_tb (
+        user_id integer not null,
+        role varchar(255)
+    )
+Hibernate: 
+    create table user_tb (
+        id integer generated by default as identity,
+        created_at timestamp(6),
+        email varchar(30) not null,
+        password varchar(60) not null,
+        username varchar(20) not null unique,
+        primary key (id)
+    )</code></pre></div></div>
+<p><code>board_tb</code>와 <code>reply_tb</code>도 같은 형식으로 출력됩니다. 열 순서와 unique 제약의 표기는 Hibernate 버전에 따라 다를 수 있습니다 [확인 필요]. 이어서 <code>alter table ... add constraint ... foreign key</code> 문이 나오면서 외래 키가 연결됩니다.</p>
+<figure class="book-figure" data-type="generated" id="figure-a2f8aa508d96"><div class="figure-scroll"><img src="../assets/img/3aa4a99ae27c2917.png" alt="IntelliJ에서 서버를 실행한 Run 창" data-raster="true"/></div><figcaption>IntelliJ에서 서버를 실행한 Run 창</figcaption><p class="credit">생성형 예시 · 실제 실행 안 함</p></figure>
+<p>로그에서는 <code>@Table</code>에 적은 이름대로 테이블이 생겼는지, <code>@ElementCollection</code> 때문에 <code>user_role_tb</code>가 따로 생겼는지 확인합니다. 서버가 <code>Started BlogApplication</code>까지 오류 없이 떴는지도 봅니다.</p>
+<p>data.sql의 <code>insert</code> 문은 로그에 보이지 않습니다. <code>insert</code> 문은 Hibernate가 아니라 스프링이 JDBC로 직접 실행하기 때문에 <code>show-sql</code> 로그에 나오지 않습니다. 서버가 정상으로 떴다면 data.sql도 오류 없이 실행된 것입니다. 열 이름이 틀렸거나 넣는 순서가 잘못되었다면 서버가 시작하지 못하고 SQL 오류를 출력합니다. 들어간 데이터는 6장에서 H2 콘솔을 연 뒤 직접 조회합니다.</p><nav class="chapter-nav"><button type="button" class="text" data-prev="true" data-href="01.html">← 이전 장</button><span>2 / 8</span><button type="button" class="text" data-next="true" data-href="03.html">다음 장 →</button></nav></section></main></div><script src="../assets/book-6d8228e561daa8ba.js"></script></body></html>
